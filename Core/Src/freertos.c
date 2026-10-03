@@ -25,6 +25,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "usart.h"
+#include <stdio.h>
+#include <string.h>
 
 /* USER CODE END Includes */
 
@@ -45,6 +48,8 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
+uint8_t msg1[] = "task one\r\n";
+uint8_t msg2[] = "task two\r\n";
 
 /* USER CODE END Variables */
 /* Definitions for defaultTask */
@@ -54,6 +59,18 @@ const osThreadAttr_t defaultTask_attributes = {
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
+/* Definitions for SecondTask */
+osThreadId_t SecondTaskHandle;
+const osThreadAttr_t SecondTask_attributes = {
+  .name = "SecondTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityAboveNormal,
+};
+/* Definitions for messageQueue */
+osMessageQueueId_t messageQueueHandle;
+const osMessageQueueAttr_t messageQueue_attributes = {
+  .name = "messageQueue"
+};
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -61,6 +78,7 @@ const osThreadAttr_t defaultTask_attributes = {
 /* USER CODE END FunctionPrototypes */
 
 void StartDefaultTask(void *argument);
+void StartSecondTask(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -86,6 +104,10 @@ void MX_FREERTOS_Init(void) {
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
 
+  /* Create the queue(s) */
+  /* creation of messageQueue */
+  messageQueueHandle = osMessageQueueNew (5, sizeof(uint32_t), &messageQueue_attributes);
+
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
   /* USER CODE END RTOS_QUEUES */
@@ -93,6 +115,9 @@ void MX_FREERTOS_Init(void) {
   /* Create the thread(s) */
   /* creation of defaultTask */
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+
+  /* creation of SecondTask */
+  SecondTaskHandle = osThreadNew(StartSecondTask, NULL, &SecondTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -114,12 +139,39 @@ void MX_FREERTOS_Init(void) {
 void StartDefaultTask(void *argument)
 {
   /* USER CODE BEGIN StartDefaultTask */
+  uint32_t value = 0;
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+    value++;
+    osMessageQueuePut(messageQueueHandle, &value, 0, osWaitForever);
+    osDelay(500);
   }
   /* USER CODE END StartDefaultTask */
+}
+
+/* USER CODE BEGIN Header_StartSecondTask */
+/**
+* @brief Function implementing the SecondTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartSecondTask */
+void StartSecondTask(void *argument)
+{
+  /* USER CODE BEGIN StartSecondTask */
+  uint32_t value;
+  /* Infinite loop */
+
+  for(;;) {
+    if (osMessageQueueGet(messageQueueHandle, &value, NULL, osWaitForever) == osOK) {
+      char msg[32];
+      snprintf(msg, sizeof(msg), "Received: %lu\r\n", value);
+      HAL_UART_Transmit(&huart2, (uint8_t *)msg, strlen(msg), HAL_MAX_DELAY);
+      osDelay(2000);
+    }
+  }
+  /* USER CODE END StartSecondTask */
 }
 
 /* Private application code --------------------------------------------------*/
