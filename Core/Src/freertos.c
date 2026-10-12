@@ -28,6 +28,7 @@
 #include "usart.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
 
 /* USER CODE END Includes */
 
@@ -71,6 +72,11 @@ osMessageQueueId_t messageQueueHandle;
 const osMessageQueueAttr_t messageQueue_attributes = {
   .name = "messageQueue"
 };
+/* Definitions for uartMutex */
+osMutexId_t uartMutexHandle;
+const osMutexAttr_t uartMutex_attributes = {
+  .name = "uartMutex"
+};
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -91,6 +97,9 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
 
   /* USER CODE END Init */
+  /* Create the mutex(es) */
+  /* creation of uartMutex */
+  uartMutexHandle = osMutexNew(&uartMutex_attributes);
 
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
@@ -139,13 +148,13 @@ void MX_FREERTOS_Init(void) {
 void StartDefaultTask(void *argument)
 {
   /* USER CODE BEGIN StartDefaultTask */
-  uint32_t value = 0;
   /* Infinite loop */
-  for(;;)
-  {
-    value++;
-    osMessageQueuePut(messageQueueHandle, &value, 0, osWaitForever);
-    osDelay(500);
+  for(;;) {
+    osMutexAcquire(uartMutexHandle, osWaitForever);
+    HAL_UART_Transmit(&huart2, msg1, strlen((char *)msg1), HAL_MAX_DELAY);
+    osMutexRelease(uartMutexHandle);
+    xTaskNotifyGive(SecondTaskHandle);
+    osDelay(2000);
   }
   /* USER CODE END StartDefaultTask */
 }
@@ -159,20 +168,20 @@ void StartDefaultTask(void *argument)
 /* USER CODE END Header_StartSecondTask */
 void StartSecondTask(void *argument)
 {
-  /* USER CODE BEGIN StartSecondTask */
-  uint32_t value;
-  /* Infinite loop */
+    for (;;)
+    {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-  for(;;) {
-    if (osMessageQueueGet(messageQueueHandle, &value, NULL, osWaitForever) == osOK) {
-      char msg[32];
-      snprintf(msg, sizeof(msg), "Received: %lu\r\n", value);
-      HAL_UART_Transmit(&huart2, (uint8_t *)msg, strlen(msg), HAL_MAX_DELAY);
-      osDelay(2000);
+        osMutexAcquire(uartMutexHandle, osWaitForever);
+
+        char msg[] = "Notification received\r\n";
+        HAL_UART_Transmit(&huart2, (uint8_t *)msg, strlen(msg), HAL_MAX_DELAY);
+
+        osMutexRelease(uartMutexHandle);
     }
-  }
-  /* USER CODE END StartSecondTask */
 }
+  /* USER CODE END StartSecondTask */
+
 
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
